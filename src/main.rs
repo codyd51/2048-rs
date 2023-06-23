@@ -1,6 +1,6 @@
 use std::io;
 use std::io::BufRead;
-use crate::board::{Board, CellContents, CellValue};
+use crate::board::{Board, CellValue};
 use crate::input::Direction;
 
 mod board;
