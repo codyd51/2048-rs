@@ -14,19 +14,16 @@ const BOARD_HEIGHT: usize = 4;
 pub struct BoardCoordinate(usize, usize);
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub struct CellValue(pub(crate) usize);
-
-#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Cell {
     Empty,
-    Occupied(CellValue),
+    Occupied(usize),
 }
 
 impl Cell {
     fn as_padded_str(&self) -> String {
         match &self {
             Cell::Empty => "    ".to_string(),
-            Cell::Occupied(value) => format!("{: ^4}", value.0),
+            Cell::Occupied(value) => format!("{: ^4}", value),
         }
     }
 
@@ -36,10 +33,10 @@ impl Cell {
     }
 
     fn with_val(v: usize) -> Self {
-        Self::Occupied(CellValue(v))
+        Self::Occupied(v)
     }
 
-    fn unwrap(&self) -> CellValue {
+    fn unwrap(&self) -> usize {
         match self {
             Cell::Empty => panic!("Expected a non-empty cell"),
             Cell::Occupied(val) => *val
@@ -94,10 +91,10 @@ impl Board {
         });
         let chosen_cell = free_cells.choose(&mut thread_rng()).unwrap();
         let value = [2, 4].choose(&mut thread_rng()).unwrap();
-        *chosen_cell = Cell::Occupied(CellValue(*value));
+        *chosen_cell = Cell::Occupied(*value);
     }
 
-    pub(crate) fn place_cell(&mut self, coordinates: BoardCoordinate, contents: CellValue) {
+    pub(crate) fn place_cell(&mut self, coordinates: BoardCoordinate, contents: usize) {
         *self.cell_with_coords_mut(coordinates) = Cell::Occupied(contents)
     }
 
@@ -211,7 +208,7 @@ impl Board {
                 }
 
                 // Combine into the destination cell
-                self.cells.0[*dest_cell_idx] = Cell::Occupied(CellValue(dest_value.0 * 2));
+                self.cells.0[*dest_cell_idx] = Cell::Occupied(dest_value * 2);
                 // Clear the contents of the source cell, because it's been merged
                 self.cells.0[*source_cell_idx] = Cell::Empty;
             }
@@ -309,7 +306,7 @@ impl<'a> Iterator for CellGridIterator<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::board::{Board, BOARD_HEIGHT, BOARD_WIDTH, BoardCoordinate, Cell, CellGridIterator, CellValue};
+    use crate::board::{Board, BOARD_HEIGHT, BOARD_WIDTH, BoardCoordinate, Cell};
     use crate::input::Direction;
 
     fn get_occupied_cells(board: &Board) -> Vec<(BoardCoordinate, Cell)> {
@@ -337,7 +334,7 @@ mod test {
                 ],
                 direction: Direction::Down,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 3), Cell::Occupied(CellValue(2))),
+                    (BoardCoordinate(0, 3), Cell::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
@@ -346,7 +343,7 @@ mod test {
                 ],
                 direction: Direction::Right,
                 expected_output_cells: vec![
-                    (BoardCoordinate(3, 0), Cell::Occupied(CellValue(2))),
+                    (BoardCoordinate(3, 0), Cell::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
@@ -355,7 +352,7 @@ mod test {
                 ],
                 direction: Direction::Left,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::Occupied(CellValue(2))),
+                    (BoardCoordinate(0, 0), Cell::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
@@ -364,7 +361,7 @@ mod test {
                 ],
                 direction: Direction::Up,
                 expected_output_cells: vec![
-                    (BoardCoordinate(3, 0), Cell::Occupied(CellValue(2))),
+                    (BoardCoordinate(3, 0), Cell::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
@@ -374,8 +371,8 @@ mod test {
                 ],
                 direction: Direction::Left,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::Occupied(CellValue(2))),
-                    (BoardCoordinate(1, 0), Cell::Occupied(CellValue(4)))
+                    (BoardCoordinate(0, 0), Cell::Occupied(2)),
+                    (BoardCoordinate(1, 0), Cell::Occupied(4))
                 ],
             },
         ];
@@ -402,7 +399,7 @@ mod test {
         // TODO(PT): This, with visual output, is a good checkpoint
         let mut board = Board::new();
         for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
-            board.cells.0[i] = Cell::Occupied(CellValue(i))
+            board.cells.0[i] = Cell::Occupied(i)
         }
 
         assert_eq!(
@@ -428,7 +425,7 @@ mod test {
 
     #[test]
     fn test_iter_axis_in_direction() {
-        let mut board = Board::new();
+        let board = Board::new();
         let cell_indexes_by_col = board.cell_indexes_by_col();
         let cell_indexes_by_row = board.cell_indexes_by_row();
         let direction_and_expected_iter = vec![
@@ -477,21 +474,21 @@ mod test {
     #[test]
     fn test_merge_tiles() {
         let mut board = Board::new();
-        board.place_cell(BoardCoordinate(0, 0), CellValue(2));
-        board.place_cell(BoardCoordinate(2, 0), CellValue(2));
-        board.place_cell(BoardCoordinate(0, 3), CellValue(16));
-        board.place_cell(BoardCoordinate(1, 3), CellValue(16));
-        board.place_cell(BoardCoordinate(2, 3), CellValue(16));
-        board.place_cell(BoardCoordinate(3, 3), CellValue(4));
+        board.place_cell(BoardCoordinate(0, 0), 2);
+        board.place_cell(BoardCoordinate(2, 0), 2);
+        board.place_cell(BoardCoordinate(0, 3), 16);
+        board.place_cell(BoardCoordinate(1, 3), 16);
+        board.place_cell(BoardCoordinate(2, 3), 16);
+        board.place_cell(BoardCoordinate(3, 3), 4);
 
         board.press(Direction::Left);
         assert_eq!(
             get_occupied_cells(&board),
             vec![
-                (BoardCoordinate(0, 0), Cell::Occupied(CellValue(4))),
-                (BoardCoordinate(0, 3), Cell::Occupied(CellValue(32))),
-                (BoardCoordinate(1, 3), Cell::Occupied(CellValue(16))),
-                (BoardCoordinate(2, 3), Cell::Occupied(CellValue(4))),
+                (BoardCoordinate(0, 0), Cell::Occupied(4)),
+                (BoardCoordinate(0, 3), Cell::Occupied(32)),
+                (BoardCoordinate(1, 3), Cell::Occupied(16)),
+                (BoardCoordinate(2, 3), Cell::Occupied(4)),
             ],
         );
     }
