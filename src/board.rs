@@ -38,6 +38,13 @@ impl Cell {
     fn with_val(v: usize) -> Self {
         Self::Occupied(CellValue(v))
     }
+
+    fn unwrap(&self) -> CellValue {
+        match self {
+            Cell::Empty => panic!("Expected a non-empty cell"),
+            Cell::Occupied(val) => *val
+        }
+    }
 }
 
 impl Display for Cell {
@@ -181,7 +188,6 @@ impl Board {
                 }
             }
             if !did_modify_cells {
-                //println!("Didn't move any tiles, breaking");
                 break;
             }
         }
@@ -190,42 +196,29 @@ impl Board {
     fn merge_contiguous_cells_in_direction(&mut self, direction: Direction) {
         let cell_indexes_by_col = self.cell_indexes_by_col();
         let cell_indexes_by_row = self.cell_indexes_by_row();
-            let mut did_modify_cells = false;
-            let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
-            for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
-                for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
-                    let dest_cell = &self.cells.0[*dest_cell_idx];
-                    let source_cell = &self.cells.0[*source_cell_idx];
-                    match source_cell {
-                        Cell::Empty => {
-                            // If the source cell is empty, we have nothing to do
-                            continue;
-                        }
-                        Cell::Occupied(source_value) => {
-                            match dest_cell {
-                                Cell::Empty => (),
-                                Cell::Occupied(dest_value) => {
-                                    // Check whether we can combine the source and dest
-                                    if source_value == dest_value {
-                                        // Combine into the destination cell
-                                        self.cells.0[*dest_cell_idx] = Cell::Occupied(CellValue(dest_value.0 * 2));
-                                        // Clear the contents of the source cell, because it's been pushed
-                                        self.cells.0[*source_cell_idx] = Cell::Empty;
-                                        did_modify_cells = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
+        let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
+        for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
+            for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
+                let dest_cell = &self.cells.0[*dest_cell_idx];
+                let source_cell = &self.cells.0[*source_cell_idx];
+                if source_cell.is_empty() || dest_cell.is_empty() {
+                    // If one of the cells is empty, we can't merge them
+                    continue;
                 }
+
+                let source_value = source_cell.unwrap();
+                let dest_value = dest_cell.unwrap();
+                if source_value != dest_value {
+                    // The cells didn't contain the same value, so we can't merge them
+                    continue;
+                }
+
+                // Combine into the destination cell
+                self.cells.0[*dest_cell_idx] = Cell::Occupied(CellValue(dest_value.0 * 2));
+                // Clear the contents of the source cell, because it's been merged
+                self.cells.0[*source_cell_idx] = Cell::Empty;
             }
-        /*
-            if !did_modify_cells {
-                //println!("Didn't move any tiles, breaking");
-                break;
-            }
-         */
+        }
     }
 
     pub(crate) fn press(&mut self, direction: Direction) {
@@ -239,41 +232,10 @@ impl Board {
         // even if more merges are possible. The user needs to do another turn to perform the next merge.
         self.merge_contiguous_cells_in_direction(direction);
         // The above step may have produced some gaps, so push cells again
+        // For example,
+        // | 16 | 16 | 16 |  4 |
+        // | 32 |    | 16 |  4 |
         self.push_cells_to_close_empty_gaps_with_perpendicular_rows(direction);
-
-        // Starting from the bottom row, merge tiles downwards
-        /*
-        for (lower_row, higher_row) in cell_indexes_by_row.iter().rev().tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
-            for (dest_cell_idx, source_cell_idx) in lower_row.iter().zip(higher_row.iter()) {
-                let dest_cell = &self.cells[*dest_cell_idx];
-                let source_cell = &self.cells[*source_cell_idx];
-                match &source_cell.contents {
-                    Cell::Empty => {
-                        // If the source cell is empty, we have nothing to do
-                        continue;
-                    }
-                    Cell::Occupied(source_value) => {
-                        match &dest_cell.contents {
-                            Cell::Empty => {
-                                // If the destination cell is empty, copy the source cell
-                                //dest_cell.contents = source_cell.contents;
-                                self.cells[*dest_cell_idx].contents = source_cell.contents;
-                            }
-                            Cell::Occupied(dest_value) => {
-                                // Check whether we can combine the source and dest
-                                if source_value == dest_value {
-                                    // Combine into the destination cell
-                                    self.cells[*dest_cell_idx].contents = Cell::Occupied(CellValue(dest_value.0 * 2));
-                                    // Clear the contents of the source cell, because it's been pushed
-                                    self.cells[*source_cell_idx].contents = Cell::Empty;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-         */
     }
 }
 
@@ -286,9 +248,7 @@ impl Display for Board {
         let horizontal_trim = "-".repeat(cell_width_including_inter_cell_border * BOARD_WIDTH);
         write!(f, "\n{}-\n", horizontal_trim)?;
 
-        //println!("{:?}", self.cells.0);
         for row in self.cells_by_row().iter() {
-            //println!("\trow {row:?}");
             // Each tile should occupy a few lines vertically, to bulk out the presentation
             for line_idx in 0..4 {
                 let empty_cell_line = format!("|{}", " ".repeat(cell_width));
@@ -528,5 +488,27 @@ mod test {
                 expected_iter_with_ref
             );
         }
+    }
+
+    #[test]
+    fn test_merge_tiles() {
+        let mut board = Board::new();
+        board.place_cell(BoardCoordinate(0, 0), CellValue(2));
+        board.place_cell(BoardCoordinate(2, 0), CellValue(2));
+        board.place_cell(BoardCoordinate(0, 3), CellValue(16));
+        board.place_cell(BoardCoordinate(1, 3), CellValue(16));
+        board.place_cell(BoardCoordinate(2, 3), CellValue(16));
+        board.place_cell(BoardCoordinate(3, 3), CellValue(4));
+
+        board.press(Direction::Left);
+        assert_eq!(
+            get_occupied_cells(&board),
+            vec![
+                (BoardCoordinate(0, 0), Cell::Occupied(CellValue(4))),
+                (BoardCoordinate(0, 3), Cell::Occupied(CellValue(32))),
+                (BoardCoordinate(1, 3), Cell::Occupied(CellValue(16))),
+                (BoardCoordinate(2, 3), Cell::Occupied(CellValue(4))),
+            ],
+        );
     }
 }
