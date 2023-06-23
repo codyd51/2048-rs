@@ -116,19 +116,6 @@ impl Board {
         &mut self.cells[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
-    // TODO(PT): Replace with cells_by_row_idx
-    fn cells_by_row(&self) -> Vec<Vec<&Cell>> {
-        let mut cells_by_row = vec![];
-        for col_idx in 0..BOARD_WIDTH {
-            let mut cells_in_row = vec![];
-            for row_idx in 0..BOARD_HEIGHT {
-                cells_in_row.push(self.cell_with_coords(BoardCoordinate(row_idx, col_idx)))
-            }
-            cells_by_row.push(cells_in_row);
-        }
-        cells_by_row
-    }
-
     fn move_cell_into_cell(&mut self, source_cell_idx: usize, dest_cell_idx: usize) {
         self.cells[dest_cell_idx].contents = self.cells[source_cell_idx].contents;
         // And empty the source cell, since it's been moved
@@ -252,14 +239,15 @@ impl Display for Board {
         let horizontal_trim = "-".repeat(cell_width_including_inter_cell_border * BOARD_WIDTH);
         write!(f, "\n{}-\n", horizontal_trim)?;
 
-        for row in self.cells_by_row().iter() {
+        for cell_indexes_in_row in self.cell_indexes_by_row().iter() {
             // Each tile should occupy a few lines vertically, to bulk out the presentation
             for line_idx in 0..4 {
                 let empty_cell_line = format!("|{}", " ".repeat(cell_width));
                 match line_idx {
                     1 => {
                         // TODO(PT): This can be filled in
-                        for cell in row.iter() {
+                        for cell_idx in cell_indexes_in_row.iter() {
+                            let cell = &self.cells[*cell_idx];
                             let cell_text = cell.contents.as_padded_str();
                             write!(f, "|   {cell_text}   ")?;
                         }
