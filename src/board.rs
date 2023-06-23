@@ -102,12 +102,10 @@ impl Board {
     }
 
     pub(crate) fn cell_with_coords(&self, coords: BoardCoordinate) -> &Cell {
-        //println!("cell_with_coords {coords:?}");
         &self.cells.0[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
     pub(crate) fn cell_with_coords_mut(&mut self, coords: BoardCoordinate) -> &mut Cell {
-        //println!("cell_with_coords_mut {coords:?}");
         &mut self.cells.0[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
@@ -152,7 +150,6 @@ impl Board {
             }
             cell_indexes_by_col.push(cell_indexes_in_col)
         }
-        //println!("Cell indexes by col {:?}", cell_indexes_by_col);
         cell_indexes_by_col
     }
 
@@ -318,7 +315,6 @@ mod test {
     fn get_occupied_cells(board: &Board) -> Vec<(BoardCoordinate, Cell)> {
         let mut out = vec![];
         for (coord, cell) in board.cells.iter() {
-            //println!("coord {coord:?}");
             if !cell.is_empty() {
                 out.push((coord, cell));
             }
@@ -344,37 +340,33 @@ mod test {
                     (BoardCoordinate(0, 3), Cell::Occupied(CellValue(2))),
                 ],
             },
-            /*
             PushTileToEdgeTestVector {
-                input_cells: vec![Cell::new(BoardCoordinate(0, 0), Cell::Occupied(CellValue(2)))],
-                direction: Direction::Down,
-                expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(0, 3), Cell::Occupied(CellValue(2)))
+                input_cells: vec![
+                    (BoardCoordinate(0, 0), Cell::with_val(2)),
                 ],
-            },
-            PushTileToEdgeTestVector {
-                input_cells: vec![Cell::new(BoardCoordinate(0, 0), Cell::Occupied(CellValue(2)))],
                 direction: Direction::Right,
                 expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(3, 0), Cell::Occupied(CellValue(2)))
+                    (BoardCoordinate(3, 0), Cell::Occupied(CellValue(2))),
                 ],
             },
             PushTileToEdgeTestVector {
-                input_cells: vec![Cell::new(BoardCoordinate(0, 3), Cell::Occupied(CellValue(2)))],
+                input_cells: vec![
+                    (BoardCoordinate(3, 0), Cell::with_val(2)),
+                ],
                 direction: Direction::Left,
                 expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(0, 0), Cell::Occupied(CellValue(2)))
+                    (BoardCoordinate(0, 0), Cell::Occupied(CellValue(2))),
                 ],
             },
             PushTileToEdgeTestVector {
-                input_cells: vec![Cell::new(BoardCoordinate(3, 3), Cell::Occupied(CellValue(2)))],
+                input_cells: vec![
+                    (BoardCoordinate(3, 3), Cell::with_val(2)),
+                ],
                 direction: Direction::Up,
                 expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(3, 0), Cell::Occupied(CellValue(2)))
+                    (BoardCoordinate(3, 0), Cell::Occupied(CellValue(2))),
                 ],
             },
-            */
-            /*
             PushTileToEdgeTestVector {
                 input_cells: vec![
                     (BoardCoordinate(1, 0), Cell::with_val(2)),
@@ -386,11 +378,8 @@ mod test {
                     (BoardCoordinate(1, 0), Cell::Occupied(CellValue(4)))
                 ],
             },
-
-             */
         ];
         for vector in input_cells_and_direction_to_expected_output.iter() {
-            //println!("doing vector");
             let mut board = Board::new();
             for (cell_coords, input_cell) in vector.input_cells.iter() {
                 match input_cell {
@@ -400,12 +389,7 @@ mod test {
                     }
                 }
             }
-            //println!("board {board}");
-            for (i, c) in board.cells.0.iter().enumerate() {
-                //println!("{i}: {c}");
-            }
             board.press(vector.direction);
-            //println!("board {board}");
             assert_eq!(
                 get_occupied_cells(&board),
                 vector.expected_output_cells
