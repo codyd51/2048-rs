@@ -33,6 +33,7 @@ fn main() -> io::Result<()> {
 
         // Only after setting up the `press`/input handling
         board.press(direction);
+        board.spawn_tile_in_random_location();
         // Show the new state of the board
         println!("{board}");
     }
