@@ -161,29 +161,26 @@ impl Board {
     fn push_cells_to_close_empty_gaps_with_perpendicular_rows(&mut self, direction: Direction) {
         let cell_indexes_by_col = self.cell_indexes_by_col();
         let cell_indexes_by_row = self.cell_indexes_by_row();
-        //println!("direction {direction:?}");
         loop {
-            let mut did_move_a_tile = false;
+            let mut did_modify_cells = false;
             let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
             for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
-                //println!("\tsrc_row={source_row:?}, dst_row={dest_row:?}");
                 for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
-                    //println!("\t\t{dest_cell_idx}, {source_cell_idx}");
                     let dest_cell = &self.cells.0[*dest_cell_idx];
                     let source_cell = &self.cells.0[*source_cell_idx];
-                    //println!("\t\t\tdst={dest_cell}, src={source_cell}");
                     if source_cell.is_empty() {
+                        // If the source cell is empty, we have nothing to do
                         continue;
                     }
                     if dest_cell.is_empty() {
-                        //println!("\t\t\tmove {source_cell:?} to {dest_cell:?}");
+                        // If the destination cell is empty, copy the source cell
                         self.move_cell_into_cell(*source_cell_idx, *dest_cell_idx);
-                        did_move_a_tile = true;
+                        did_modify_cells = true;
                         break;
                     }
                 }
             }
-            if !did_move_a_tile {
+            if !did_modify_cells {
                 //println!("Didn't move any tiles, breaking");
                 break;
             }
@@ -191,19 +188,58 @@ impl Board {
     }
 
     fn merge_contiguous_cells_in_direction(&mut self, direction: Direction) {
-        /*
         let cell_indexes_by_col = self.cell_indexes_by_col();
         let cell_indexes_by_row = self.cell_indexes_by_row();
-        let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
-        for (higher_row, lower_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {}
-        */
+            let mut did_modify_cells = false;
+            let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
+            for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
+                for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
+                    let dest_cell = &self.cells.0[*dest_cell_idx];
+                    let source_cell = &self.cells.0[*source_cell_idx];
+                    match source_cell {
+                        Cell::Empty => {
+                            // If the source cell is empty, we have nothing to do
+                            continue;
+                        }
+                        Cell::Occupied(source_value) => {
+                            match dest_cell {
+                                Cell::Empty => (),
+                                Cell::Occupied(dest_value) => {
+                                    // Check whether we can combine the source and dest
+                                    if source_value == dest_value {
+                                        // Combine into the destination cell
+                                        self.cells.0[*dest_cell_idx] = Cell::Occupied(CellValue(dest_value.0 * 2));
+                                        // Clear the contents of the source cell, because it's been pushed
+                                        self.cells.0[*source_cell_idx] = Cell::Empty;
+                                        did_modify_cells = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        /*
+            if !did_modify_cells {
+                //println!("Didn't move any tiles, breaking");
+                break;
+            }
+         */
     }
 
     pub(crate) fn press(&mut self, direction: Direction) {
         // First, push all the elements towards the edge, until they meet resistance
         self.push_cells_to_close_empty_gaps_with_perpendicular_rows(direction);
         // Now iterate again and try to merge contiguous tiles that share the same value
-        //self.merge_contiguous_cells_in_direction(direction);
+        // We need to do this in a separate iteration because the behavior is subtly different:
+        // When pushing cells around, we want to recursively push cells until there's no remaining free
+        // space.
+        // However, when merging cells, we want to stop processing a row as soon as we merge a pair of cells,
+        // even if more merges are possible. The user needs to do another turn to perform the next merge.
+        self.merge_contiguous_cells_in_direction(direction);
+        // The above step may have produced some gaps, so push cells again
+        self.push_cells_to_close_empty_gaps_with_perpendicular_rows(direction);
 
         // Starting from the bottom row, merge tiles downwards
         /*
