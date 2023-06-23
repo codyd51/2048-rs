@@ -14,22 +14,22 @@ const BOARD_HEIGHT: usize = 4;
 pub struct BoardCoordinate(usize, usize);
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum Cell {
+pub enum CellContents {
     Empty,
     Occupied(usize),
 }
 
-impl Cell {
+impl CellContents {
     fn as_padded_str(&self) -> String {
         match &self {
-            Cell::Empty => "    ".to_string(),
-            Cell::Occupied(value) => format!("{: ^4}", value),
+            Self::Empty => "    ".to_string(),
+            Self::Occupied(value) => format!("{: ^4}", value),
         }
     }
 
     // Only needed when pushing pieces around
     fn is_empty(&self) -> bool {
-        matches!(self, Cell::Empty)
+        matches!(self, CellContents::Empty)
     }
 
     fn with_val(v: usize) -> Self {
@@ -38,72 +38,82 @@ impl Cell {
 
     fn unwrap(&self) -> usize {
         match self {
-            Cell::Empty => panic!("Expected a non-empty cell"),
-            Cell::Occupied(val) => *val
+            Self::Empty => panic!("Expected a non-empty cell"),
+            Self::Occupied(val) => *val
         }
     }
 }
 
-impl Display for Cell {
+impl Display for CellContents {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[ {} ]", self.as_padded_str())
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct CellGrid([Cell; BOARD_WIDTH * BOARD_HEIGHT]);
+#[derive(Debug, PartialEq, Clone)]
+pub struct Cell {
+    coords: BoardCoordinate,
+    contents: CellContents,
+}
 
-impl CellGrid {
-    fn new() -> Self {
-        let mut cells = vec![];
-        for _row_idx in 0..BOARD_HEIGHT {
-            for _col_idx in 0..BOARD_WIDTH {
-                cells.push(Cell::Empty);
-            }
+impl Cell {
+    fn with_coords(coords: BoardCoordinate) -> Self {
+        Self {
+            coords,
+            contents: CellContents::Empty,
         }
-        Self(cells.try_into().unwrap())
     }
 
-    fn iter(&self) -> CellGridIterator {
-        CellGridIterator {
-            cells: &self.0,
-            index: 0,
+    fn new(coords: BoardCoordinate, contents: CellContents) -> Self {
+        Self {
+            coords,
+            contents
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.contents.is_empty()
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct Board {
-    pub(crate) cells: CellGrid,
+    pub(crate) cells: [Cell; BOARD_WIDTH * BOARD_HEIGHT],
 }
 
 impl Board {
     pub(crate) fn new() -> Self {
+        let mut cells = vec![];
+        for row_idx in 0..BOARD_HEIGHT {
+            for col_idx in 0..BOARD_WIDTH {
+                cells.push(Cell::with_coords(BoardCoordinate(col_idx, row_idx)));
+            }
+        }
         Self {
-            cells: CellGrid::new(),
+            cells: cells.try_into().unwrap()
         }
     }
 
     pub(crate) fn spawn_tile_in_random_location(&mut self) {
         // Pick a random free cell
-        let free_cells = self.cells.0.iter_mut().filter(|elem|{
-            **elem == Cell::Empty
+        let free_cells = self.cells.iter_mut().filter(|elem|{
+            elem.is_empty()
         });
         let chosen_cell = free_cells.choose(&mut thread_rng()).unwrap();
         let value = [2, 4].choose(&mut thread_rng()).unwrap();
-        *chosen_cell = Cell::Occupied(*value);
+        chosen_cell.contents = CellContents::Occupied(*value);
     }
 
     pub(crate) fn place_cell(&mut self, coordinates: BoardCoordinate, contents: usize) {
-        *self.cell_with_coords_mut(coordinates) = Cell::Occupied(contents)
+        self.cell_with_coords_mut(coordinates).contents = CellContents::Occupied(contents)
     }
 
     pub(crate) fn cell_with_coords(&self, coords: BoardCoordinate) -> &Cell {
-        &self.cells.0[coords.0 + (coords.1 * BOARD_WIDTH)]
+        &self.cells[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
     pub(crate) fn cell_with_coords_mut(&mut self, coords: BoardCoordinate) -> &mut Cell {
-        &mut self.cells.0[coords.0 + (coords.1 * BOARD_WIDTH)]
+        &mut self.cells[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
     // TODO(PT): Replace with cells_by_row_idx
@@ -120,9 +130,9 @@ impl Board {
     }
 
     fn move_cell_into_cell(&mut self, source_cell_idx: usize, dest_cell_idx: usize) {
-        self.cells.0[dest_cell_idx] = self.cells.0[source_cell_idx];
+        self.cells[dest_cell_idx].contents = self.cells[source_cell_idx].contents;
         // And empty the source cell, since it's been moved
-        self.cells.0[source_cell_idx] = Cell::Empty;
+        self.cells[source_cell_idx].contents = CellContents::Empty;
     }
 
     // Only needed during press
@@ -167,8 +177,8 @@ impl Board {
             let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
             for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
                 for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
-                    let dest_cell = &self.cells.0[*dest_cell_idx];
-                    let source_cell = &self.cells.0[*source_cell_idx];
+                    let dest_cell = &self.cells[*dest_cell_idx];
+                    let source_cell = &self.cells[*source_cell_idx];
                     if source_cell.is_empty() {
                         // If the source cell is empty, we have nothing to do
                         continue;
@@ -193,24 +203,24 @@ impl Board {
         let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
         for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
             for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
-                let dest_cell = &self.cells.0[*dest_cell_idx];
-                let source_cell = &self.cells.0[*source_cell_idx];
+                let dest_cell = &self.cells[*dest_cell_idx];
+                let source_cell = &self.cells[*source_cell_idx];
                 if source_cell.is_empty() || dest_cell.is_empty() {
                     // If one of the cells is empty, we can't merge them
                     continue;
                 }
 
-                let source_value = source_cell.unwrap();
-                let dest_value = dest_cell.unwrap();
+                let source_value = source_cell.contents.unwrap();
+                let dest_value = dest_cell.contents.unwrap();
                 if source_value != dest_value {
                     // The cells didn't contain the same value, so we can't merge them
                     continue;
                 }
 
                 // Combine into the destination cell
-                self.cells.0[*dest_cell_idx] = Cell::Occupied(dest_value * 2);
+                self.cells[*dest_cell_idx].contents = CellContents::Occupied(dest_value * 2);
                 // Clear the contents of the source cell, because it's been merged
-                self.cells.0[*source_cell_idx] = Cell::Empty;
+                self.cells[*source_cell_idx].contents = CellContents::Empty;
             }
         }
     }
@@ -250,7 +260,7 @@ impl Display for Board {
                     1 => {
                         // TODO(PT): This can be filled in
                         for cell in row.iter() {
-                            let cell_text = cell.as_padded_str();
+                            let cell_text = cell.contents.as_padded_str();
                             write!(f, "|   {cell_text}   ")?;
                         }
                         write!(f, "|\n")?
@@ -265,64 +275,25 @@ impl Display for Board {
     }
 }
 
-impl<'a> IntoIterator for &'a CellGrid {
-    type Item = (BoardCoordinate, Cell);
-    type IntoIter = CellGridIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        CellGridIterator {
-            cells: &self.0,
-            index: 0,
-        }
-    }
-}
-
-pub struct CellGridIterator<'a> {
-    cells: &'a [Cell; BOARD_WIDTH * BOARD_HEIGHT],
-    index: usize,
-}
-
-impl<'a> Iterator for CellGridIterator<'a> {
-    type Item = (BoardCoordinate, Cell);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.cells.len() {
-            return None;
-        }
-
-        let row_idx = self.index % BOARD_WIDTH;
-        let col_idx = self.index / BOARD_WIDTH;
-
-        let out = Some(
-            (
-                BoardCoordinate(row_idx, col_idx),
-                self.cells[self.index]
-            )
-        );
-        self.index += 1;
-        out
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::board::{Board, BOARD_HEIGHT, BOARD_WIDTH, BoardCoordinate, Cell};
+    use crate::board::{Board, BOARD_HEIGHT, BOARD_WIDTH, BoardCoordinate, Cell, CellContents};
     use crate::input::Direction;
 
-    fn get_occupied_cells(board: &Board) -> Vec<(BoardCoordinate, Cell)> {
+    fn get_occupied_cells(board: &Board) -> Vec<Cell> {
         let mut out = vec![];
-        for (coord, cell) in board.cells.iter() {
+        for cell in board.cells.iter() {
             if !cell.is_empty() {
-                out.push((coord, cell));
+                out.push(cell.clone());
             }
         }
         out
     }
 
     struct PushTileToEdgeTestVector {
-        input_cells: Vec<(BoardCoordinate, Cell)>,
+        input_cells: Vec<Cell>,
         direction: Direction,
-        expected_output_cells: Vec<(BoardCoordinate, Cell)>,
+        expected_output_cells: Vec<Cell>,
     }
 
     #[test]
@@ -330,61 +301,56 @@ mod test {
         let input_cells_and_direction_to_expected_output = vec![
             PushTileToEdgeTestVector {
                 input_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::with_val(2)),
+                    Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2)),
                 ],
                 direction: Direction::Down,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 3), Cell::Occupied(2)),
+                    Cell::new(BoardCoordinate(0, 3), CellContents::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
                 input_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::with_val(2)),
+                    Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2)),
                 ],
                 direction: Direction::Right,
                 expected_output_cells: vec![
-                    (BoardCoordinate(3, 0), Cell::Occupied(2)),
+                    Cell::new(BoardCoordinate(3, 0), CellContents::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
                 input_cells: vec![
-                    (BoardCoordinate(3, 0), Cell::with_val(2)),
+                    Cell::new(BoardCoordinate(3, 0), CellContents::with_val(2)),
                 ],
                 direction: Direction::Left,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::Occupied(2)),
+                    Cell::new(BoardCoordinate(0, 0), CellContents::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
                 input_cells: vec![
-                    (BoardCoordinate(3, 3), Cell::with_val(2)),
+                    Cell::new(BoardCoordinate(3, 3), CellContents::with_val(2)),
                 ],
                 direction: Direction::Up,
                 expected_output_cells: vec![
-                    (BoardCoordinate(3, 0), Cell::Occupied(2)),
+                    Cell::new(BoardCoordinate(3, 0), CellContents::Occupied(2)),
                 ],
             },
             PushTileToEdgeTestVector {
                 input_cells: vec![
-                    (BoardCoordinate(1, 0), Cell::with_val(2)),
-                    (BoardCoordinate(2, 0), Cell::with_val(4)),
+                    Cell::new(BoardCoordinate(1, 0), CellContents::with_val(2)),
+                    Cell::new(BoardCoordinate(2, 0), CellContents::with_val(4)),
                 ],
                 direction: Direction::Left,
                 expected_output_cells: vec![
-                    (BoardCoordinate(0, 0), Cell::Occupied(2)),
-                    (BoardCoordinate(1, 0), Cell::Occupied(4))
+                    Cell::new(BoardCoordinate(0, 0), CellContents::Occupied(2)),
+                    Cell::new(BoardCoordinate(1, 0), CellContents::Occupied(4))
                 ],
             },
         ];
         for vector in input_cells_and_direction_to_expected_output.iter() {
             let mut board = Board::new();
-            for (cell_coords, input_cell) in vector.input_cells.iter() {
-                match input_cell {
-                    Cell::Empty => {}
-                    Cell::Occupied(val) => {
-                        board.place_cell(*cell_coords, *val);
-                    }
-                }
+            for cell in vector.input_cells.iter() {
+                board.place_cell(cell.coords, cell.contents.unwrap());
             }
             board.press(vector.direction);
             assert_eq!(
@@ -396,10 +362,10 @@ mod test {
 
     #[test]
     fn test_cells_by_axis() {
-        // TODO(PT): This, with visual output, is a good checkpoint
+        // TODO(PT): This setup, with visual output, is a good checkpoint
         let mut board = Board::new();
         for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
-            board.cells.0[i] = Cell::Occupied(i)
+            board.cells[i].contents = CellContents::Occupied(i)
         }
 
         assert_eq!(
@@ -485,10 +451,10 @@ mod test {
         assert_eq!(
             get_occupied_cells(&board),
             vec![
-                (BoardCoordinate(0, 0), Cell::Occupied(4)),
-                (BoardCoordinate(0, 3), Cell::Occupied(32)),
-                (BoardCoordinate(1, 3), Cell::Occupied(16)),
-                (BoardCoordinate(2, 3), Cell::Occupied(4)),
+                Cell::new(BoardCoordinate(0, 0), CellContents::Occupied(4)),
+                Cell::new(BoardCoordinate(0, 3), CellContents::Occupied(32)),
+                Cell::new(BoardCoordinate(1, 3), CellContents::Occupied(16)),
+                Cell::new(BoardCoordinate(2, 3), CellContents::Occupied(4)),
             ],
         );
     }
