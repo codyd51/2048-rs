@@ -12,7 +12,9 @@ fn main() -> io::Result<()> {
     // Spawn a couple tiles
     board.spawn_tile_in_random_location();
     board.spawn_tile_in_random_location();
-    println!("Board {board}");
+
+    // Show the initial state of the board
+    println!("{board}");
 
     let stdin = io::stdin();
     for maybe_next_line_of_input in stdin.lock().lines() {
@@ -29,7 +31,10 @@ fn main() -> io::Result<()> {
             },
         };
 
+        // Only after setting up the `press`/input handling
         board.press(direction);
+        // Show the new state of the board
+        println!("{board}");
     }
 
     Ok(())

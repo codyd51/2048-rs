@@ -1,4 +1,5 @@
 
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum Direction {
     Left,
     Right,
