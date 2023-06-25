@@ -1,10 +1,9 @@
-
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum Direction {
     Left,
     Right,
     Up,
-    Down
+    Down,
 }
 
 impl TryFrom<&str> for Direction {

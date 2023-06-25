@@ -1,7 +1,7 @@
+use crate::board::Board;
+use crate::input::Direction;
 use std::io;
 use std::io::BufRead;
-use crate::board::{Board};
-use crate::input::Direction;
 
 mod board;
 mod input;
@@ -28,12 +28,23 @@ fn main() -> io::Result<()> {
             Err(_) => {
                 println!("Unrecognized input!");
                 continue;
-            },
+            }
         };
 
         // Only after setting up the `press`/input handling
         board.press(direction);
-        board.spawn_tile_in_random_location();
+
+        if board.is_full() {
+            println!("Game over!");
+            // Reset to an empty board
+            board.empty();
+            board.spawn_tile_in_random_location();
+            board.spawn_tile_in_random_location();
+        }
+        else {
+            board.spawn_tile_in_random_location();
+        }
+
         // Show the new state of the board
         println!("{board}");
     }

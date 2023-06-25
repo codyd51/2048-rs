@@ -3,9 +3,9 @@ use std::iter::Rev;
 use std::slice::Iter;
 
 // Only need itertools once we start iterating multiple board rows at a time, for merging
+use crate::input::Direction;
 use itertools::{Either, Itertools};
 use rand::prelude::*;
-use crate::input::Direction;
 
 const BOARD_WIDTH: usize = 4;
 const BOARD_HEIGHT: usize = 4;
@@ -39,14 +39,8 @@ impl CellContents {
     fn unwrap(&self) -> usize {
         match self {
             Self::Empty => panic!("Expected a non-empty cell"),
-            Self::Occupied(val) => *val
+            Self::Occupied(val) => *val,
         }
-    }
-}
-
-impl Display for CellContents {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[ {} ]", self.as_padded_str())
     }
 }
 
@@ -72,7 +66,7 @@ impl Cell {
     }
 
     fn is_empty(&self) -> bool {
-        self.contents.is_empty()
+        matches!(self.contents, CellContents::Empty)
     }
 }
 
@@ -90,15 +84,13 @@ impl Board {
             }
         }
         Self {
-            cells: cells.try_into().unwrap()
+            cells: cells.try_into().unwrap(),
         }
     }
 
     pub(crate) fn spawn_tile_in_random_location(&mut self) {
         // Pick a random free cell
-        let free_cells = self.cells.iter_mut().filter(|elem|{
-            elem.is_empty()
-        });
+        let free_cells = self.cells.iter_mut().filter(|elem| elem.is_empty());
         let chosen_cell = free_cells.choose(&mut thread_rng()).unwrap();
         let value = [2, 4].choose(&mut thread_rng()).unwrap();
         chosen_cell.contents = CellContents::Occupied(*value);
@@ -106,10 +98,6 @@ impl Board {
 
     pub(crate) fn place_cell(&mut self, coordinates: BoardCoordinate, contents: usize) {
         self.cell_with_coords_mut(coordinates).contents = CellContents::Occupied(contents)
-    }
-
-    pub(crate) fn cell_with_coords(&self, coords: BoardCoordinate) -> &Cell {
-        &self.cells[coords.0 + (coords.1 * BOARD_WIDTH)]
     }
 
     pub(crate) fn cell_with_coords_mut(&mut self, coords: BoardCoordinate) -> &mut Cell {
@@ -124,30 +112,30 @@ impl Board {
 
     // Only needed during press
     fn cell_indexes_by_row(&self) -> Vec<Vec<usize>> {
-        let mut cell_indexes_by_row = vec![];
-        for col_idx in 0..BOARD_WIDTH {
-            let mut cell_indexes_in_row = vec![];
-            for row_idx in 0..BOARD_HEIGHT {
-                cell_indexes_in_row.push(row_idx + (col_idx * BOARD_WIDTH))
-            }
-            cell_indexes_by_row.push(cell_indexes_in_row)
-        }
-        cell_indexes_by_row
+        (0..BOARD_WIDTH)
+            .map(|col_idx| {
+                (0..BOARD_HEIGHT)
+                    .map(|row_idx| (row_idx + (col_idx * BOARD_WIDTH)))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
     fn cell_indexes_by_col(&self) -> Vec<Vec<usize>> {
-        let mut cell_indexes_by_col = vec![];
-        for row_idx in 0..BOARD_HEIGHT {
-            let mut cell_indexes_in_col = vec![];
-            for col_idx in 0..BOARD_WIDTH {
-                cell_indexes_in_col.push(row_idx + (col_idx * BOARD_WIDTH))
-            }
-            cell_indexes_by_col.push(cell_indexes_in_col)
-        }
-        cell_indexes_by_col
+        (0..BOARD_HEIGHT)
+            .map(|row_idx| {
+                (0..BOARD_WIDTH)
+                    .map(|col_idx| (row_idx + (col_idx * BOARD_WIDTH)))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
-    fn iter_axis_in_direction<'a>(direction: Direction, cell_indexes_by_col: &'a Vec<Vec<usize>>, cell_indexes_by_row: &'a Vec<Vec<usize>>) -> Either<Iter<'a, Vec<usize>>, Rev<Iter<'a, Vec<usize>>>> {
+    fn iter_axis_in_direction<'a>(
+        direction: Direction,
+        cell_indexes_by_col: &'a Vec<Vec<usize>>,
+        cell_indexes_by_row: &'a Vec<Vec<usize>>,
+    ) -> Either<Iter<'a, Vec<usize>>, Rev<Iter<'a, Vec<usize>>>> {
         match direction {
             Direction::Left => Either::Left(cell_indexes_by_col.iter()),
             Direction::Right => Either::Right(cell_indexes_by_col.iter().rev()),
@@ -161,7 +149,8 @@ impl Board {
         let cell_indexes_by_row = self.cell_indexes_by_row();
         loop {
             let mut did_modify_cells = false;
-            let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
+            let row_iter =
+                Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
             for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
                 for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
                     let dest_cell = &self.cells[*dest_cell_idx];
@@ -187,7 +176,8 @@ impl Board {
     fn merge_contiguous_cells_in_direction(&mut self, direction: Direction) {
         let cell_indexes_by_col = self.cell_indexes_by_col();
         let cell_indexes_by_row = self.cell_indexes_by_row();
-        let row_iter = Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
+        let row_iter =
+            Self::iter_axis_in_direction(direction, &cell_indexes_by_col, &cell_indexes_by_row);
         for (dest_row, source_row) in row_iter.tuple_windows::<(&Vec<usize>, &Vec<usize>)>() {
             for (dest_cell_idx, source_cell_idx) in dest_row.iter().zip(source_row.iter()) {
                 let dest_cell = &self.cells[*dest_cell_idx];
@@ -228,6 +218,21 @@ impl Board {
         // | 32 |    | 16 |  4 |
         self.push_cells_to_close_empty_gaps_with_perpendicular_rows(direction);
     }
+
+    pub(crate) fn is_full(&self) -> bool {
+        for cell in self.cells.iter() {
+            if cell.contents == CellContents::Empty {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub(crate) fn empty(&mut self) {
+        for cell in self.cells.iter_mut() {
+            cell.contents = CellContents::Empty
+        }
+    }
 }
 
 impl Display for Board {
@@ -254,7 +259,7 @@ impl Display for Board {
                         write!(f, "|\n")?
                     }
                     3 => write!(f, "{}-\n", horizontal_trim)?,
-                    _ => write!(f, "{}|\n", empty_cell_line.repeat(BOARD_WIDTH))?
+                    _ => write!(f, "{}|\n", empty_cell_line.repeat(BOARD_WIDTH))?,
                 }
             }
         }
@@ -265,7 +270,7 @@ impl Display for Board {
 
 #[cfg(test)]
 mod test {
-    use crate::board::{Board, BOARD_HEIGHT, BOARD_WIDTH, BoardCoordinate, Cell, CellContents};
+    use crate::board::{Board, BoardCoordinate, Cell, CellContents, BOARD_HEIGHT, BOARD_WIDTH};
     use crate::input::Direction;
 
     fn get_occupied_cells(board: &Board) -> Vec<Cell> {
@@ -288,40 +293,36 @@ mod test {
     fn push_tile_to_edge() {
         let input_cells_and_direction_to_expected_output = vec![
             PushTileToEdgeTestVector {
-                input_cells: vec![
-                    Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2)),
-                ],
+                input_cells: vec![Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2))],
                 direction: Direction::Down,
-                expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(0, 3), CellContents::Occupied(2)),
-                ],
+                expected_output_cells: vec![Cell::new(
+                    BoardCoordinate(0, 3),
+                    CellContents::Occupied(2),
+                )],
             },
             PushTileToEdgeTestVector {
-                input_cells: vec![
-                    Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2)),
-                ],
+                input_cells: vec![Cell::new(BoardCoordinate(0, 0), CellContents::with_val(2))],
                 direction: Direction::Right,
-                expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(3, 0), CellContents::Occupied(2)),
-                ],
+                expected_output_cells: vec![Cell::new(
+                    BoardCoordinate(3, 0),
+                    CellContents::Occupied(2),
+                )],
             },
             PushTileToEdgeTestVector {
-                input_cells: vec![
-                    Cell::new(BoardCoordinate(3, 0), CellContents::with_val(2)),
-                ],
+                input_cells: vec![Cell::new(BoardCoordinate(3, 0), CellContents::with_val(2))],
                 direction: Direction::Left,
-                expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(0, 0), CellContents::Occupied(2)),
-                ],
+                expected_output_cells: vec![Cell::new(
+                    BoardCoordinate(0, 0),
+                    CellContents::Occupied(2),
+                )],
             },
             PushTileToEdgeTestVector {
-                input_cells: vec![
-                    Cell::new(BoardCoordinate(3, 3), CellContents::with_val(2)),
-                ],
+                input_cells: vec![Cell::new(BoardCoordinate(3, 3), CellContents::with_val(2))],
                 direction: Direction::Up,
-                expected_output_cells: vec![
-                    Cell::new(BoardCoordinate(3, 0), CellContents::Occupied(2)),
-                ],
+                expected_output_cells: vec![Cell::new(
+                    BoardCoordinate(3, 0),
+                    CellContents::Occupied(2),
+                )],
             },
             PushTileToEdgeTestVector {
                 input_cells: vec![
@@ -331,7 +332,7 @@ mod test {
                 direction: Direction::Left,
                 expected_output_cells: vec![
                     Cell::new(BoardCoordinate(0, 0), CellContents::Occupied(2)),
-                    Cell::new(BoardCoordinate(1, 0), CellContents::Occupied(4))
+                    Cell::new(BoardCoordinate(1, 0), CellContents::Occupied(4)),
                 ],
             },
         ];
@@ -341,10 +342,7 @@ mod test {
                 board.place_cell(cell.coords, cell.contents.unwrap());
             }
             board.press(vector.direction);
-            assert_eq!(
-                get_occupied_cells(&board),
-                vector.expected_output_cells
-            );
+            assert_eq!(get_occupied_cells(&board), vector.expected_output_cells);
         }
     }
 
@@ -386,29 +384,37 @@ mod test {
             (
                 Direction::Left,
                 vec![
-                    vec![0, 4, 8, 12], vec![1, 5, 9, 13],
-                    vec![2, 6, 10, 14], vec![3, 7, 11, 15],
+                    vec![0, 4, 8, 12],
+                    vec![1, 5, 9, 13],
+                    vec![2, 6, 10, 14],
+                    vec![3, 7, 11, 15],
                 ],
             ),
             (
                 Direction::Right,
                 vec![
-                    vec![3, 7, 11, 15],  vec![2, 6, 10, 14],
-                    vec![1, 5, 9, 13], vec![0, 4, 8, 12]
+                    vec![3, 7, 11, 15],
+                    vec![2, 6, 10, 14],
+                    vec![1, 5, 9, 13],
+                    vec![0, 4, 8, 12],
                 ],
             ),
             (
                 Direction::Up,
                 vec![
-                    vec![0, 1, 2, 3], vec![4, 5, 6, 7],
-                    vec![8, 9, 10, 11], vec![12, 13, 14, 15],
+                    vec![0, 1, 2, 3],
+                    vec![4, 5, 6, 7],
+                    vec![8, 9, 10, 11],
+                    vec![12, 13, 14, 15],
                 ],
             ),
             (
                 Direction::Down,
                 vec![
-                    vec![12, 13, 14, 15], vec![8, 9, 10, 11],
-                    vec![4, 5, 6, 7], vec![0, 1, 2, 3],
+                    vec![12, 13, 14, 15],
+                    vec![8, 9, 10, 11],
+                    vec![4, 5, 6, 7],
+                    vec![0, 1, 2, 3],
                 ],
             ),
         ];
@@ -419,7 +425,8 @@ mod test {
                     *direction,
                     &cell_indexes_by_col,
                     &cell_indexes_by_row
-                ).collect::<Vec<_>>(),
+                )
+                .collect::<Vec<_>>(),
                 expected_iter_with_ref
             );
         }
